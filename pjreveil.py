@@ -1,6 +1,6 @@
 ﻿#!/usr/bin/env python
 import ptvsd
-ptvsd.enable_attach(secret='my_secret', address = ('0.0.0.0', 5678))  #tcp://my_secret@pifamille/
+ptvsd.enable_attach(secret='pj', address = ('0.0.0.0', 5678))  #tcp://my_secret@pifamille/
 #ptvsd.wait_for_attach()
 import sys, os
 import subprocess
@@ -61,19 +61,19 @@ STATE_FOUR = 4
 STATE_PLAY_ALARM=5
 
 
-# liste des radio enregistr? avec MPC
-listeRadio.append("ShoutCast")
-listeRadio.append("Classique")
-listeRadio.append("Radio-Canada")
+## liste des radio enregistr? avec MPC
+#listeRadio.append("ShoutCast")
+#listeRadio.append("Classique")
+#listeRadio.append("Radio-Canada")
 
 ALARM="00:00"
 ALARMCHOIX=ALARM
 ALARMDUR="00:00"
 
-# Stop Radio
-call(["mpc", "stop"])
-#call(["mpc", "play"])
-#call(["mpc", "stats"])
+## Stop Radio
+#call(["mpc", "stop"])
+##call(["mpc", "play"])
+##call(["mpc", "stats"])
     
 cad = pifacecad.PiFaceCAD()
 cad.lcd.blink_off()
@@ -127,40 +127,41 @@ def volume(deltak):
     if valplus>=100: valplus=100
     call(["mpc", "volume", str(valplus)])   
     #led.draw_text2(0,24,"Volume :" + str(valplus) +" % ",1)
-    writeToDisplay(1,0,"Volume :{}".format(str(valplus)))
+    writeToDisplay(0,0,"Volume :{}".format(str(valplus)))
     
-def radioplay(val):
-    global wifi
-    global radioIsPlaying
-    global radioTitre
-    global snooze
-    global ALARM
-    global ALARMDUR
-    if val > len(listeRadio): 
-        call(["mpc", "stop"])
-        snooze=0
-        radioIsPlaying=0
-        ALARM=ALARMDUR
-    else: 
-        radioTitre=val
-        if wifi==0:
-            cad.lcd.clear()
-            writeToDisplay(1,0,"Wifi Activation")
-            call(["ifup", "wlan0"])
-            time.sleep(15)
-            writeToDisplay(1,0,"Wifi Actif")
-            wifi=1
-        call(["mpc", "play", str(radioTitre)])
-        radioIsPlaying=1
+#def radioplay(val):
+#    global wifi
+#    global radioIsPlaying
+#    global radioTitre
+#    global snooze
+#    global ALARM
+#    global ALARMDUR
+#    if val > len(listeRadio): 
+#        call(["mpc", "stop"])
+#        snooze=0
+#        radioIsPlaying=0
+#        ALARM=ALARMDUR
+#    else: 
+#        radioTitre=val
+#        if wifi==0:
+#            cad.lcd.clear()
+#            writeToDisplay(1,0,"Wifi Activation")
+#            call(["ifup", "wlan0"])
+#            time.sleep(15)
+#            writeToDisplay(1,0,"Wifi Actif")
+#            wifi=1
+#        call(["mpc", "play", str(radioTitre)])
+#        radioIsPlaying=1
 
     
-    #cad.lcd.write("Volume :" + str(valplus) +" % ")
-    writeToDisplay(0,0,"Volume :" + str(valplus) +" % ")
+#    #cad.lcd.write("Volume :" + str(valplus) +" % ")
+#    writeToDisplay(0,0,"Volume :" + str(valplus) +" % ")
 
-    #led.display()       
+#    #led.display()       
 
 def displayMenuWithChoice(menu,choix):
     global menuPosition
+    print "meun:{0}, choix:{1}".format(menu, choix)
     if choix > 0:
         #increment the menu position if we can
         if menuPosition==len(menu)-1:
@@ -176,9 +177,13 @@ def displayMenuWithChoice(menu,choix):
     a=(menuPosition*10)*-1
     cad.lcd.clear()
     #Display the selected menu item and the next one if possible.
-    writeToDisplay(0,0,">{}".format(menu[menuPosition]))
-    if menuPosition+1 < len(menu):
-        writeToDisplay(0,1," {}".format(menu[menuPosition+1]))
+    if menuPosition >= 0:
+        if menuPosition < len(menu):
+            writeToDisplay(0,0,">{}".format(menu[menuPosition]))
+        if menuPosition+1 < len(menu):
+            writeToDisplay(0,1," {}".format(menu[menuPosition+1]))
+    else:
+        print "menuPosition is not valid:{0:d}".format(menuPosition)
 def menuGeneral(choix):
     menu = []
     menu.append("REGLAGES")
@@ -201,7 +206,8 @@ def menuReglage(choix):
 
 def menuRadio(choix):
     global listeRadio
-    displayMenuWithChoice(listeRadio,choix)   
+    global radio
+    displayMenuWithChoice(radio.listeRadio,choix)   
     
     
 
