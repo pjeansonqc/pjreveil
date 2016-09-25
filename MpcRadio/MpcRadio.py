@@ -1,6 +1,7 @@
 ﻿#!/usr/bin/env python
 #import ptvsd
-#ptvsd.enable_attach(secret='my_secret', address = ('0.0.0.0', 5678))  #tcp://my_secret@pifamille/
+
+#ptvsd.enable_attach(secret='my_secret', address = ('0.0.0.0', 5678))  #tcp://pj@pifamille/
 #ptvsd.wait_for_attach()
 import sys, os
 import subprocess
@@ -14,11 +15,18 @@ import signal
 
 
 class MpcRadio(object):
-    def __init__(self):
+    def __init__(self, iVerbose=0):
+        self.verbose=iVerbose
+        try :
+            mixer = alsaaudio.Mixer('PCM', 0)
+        except alsaaudio.ALSAAudioError :
+            sys.stderr.write("No such mixer\n")
+            sys.exit(1)
         self._radioIsPlaying=False
         self.wifi = True
         # liste des radio enregistree avec MPC
         self.listeRadio = ["ShoutCast", "Classique", "Radio-Canada"]
+        self.playingTitle = ""
         # Stop Radio
         call(["mpc", "stop"])
     #
@@ -39,7 +47,11 @@ class MpcRadio(object):
     def stats(self):
         call(["mpc", "stats"])
 
+    def nowPlaying(self):
+        return self.playingTitle
+
     def radioPlay(self, val):
+        print "radioPlay val:{0}".format(val)
         if val > len(self.listeRadio):
             self.stop()
             self._radioIsPlaying = False
@@ -49,9 +61,9 @@ class MpcRadio(object):
                 call(["ifup", "wlan0"])
                 time.sleep(15)
                 self.wifi=1
-            call(["mpc", "play", str(radioTitre)])
+            call(["mpc", "play", str(radioTitre+1)])
             self._radioIsPlaying = True
-
+            self.playingTitle = self.listeRadio[val]
 
 if __name__ == "__main__":
     radio = MpcRadio()

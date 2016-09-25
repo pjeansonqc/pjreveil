@@ -1,16 +1,18 @@
 ﻿#!/usr/bin/env python
 import ptvsd
-ptvsd.enable_attach(secret='pj', address = ('0.0.0.0', 5678))  #tcp://my_secret@pifamille/
+print "tcp://pj@pifamille/"
+ptvsd.enable_attach(secret='pj', address = ('0.0.0.0', 5678))  #tcp://pj@pifamille/
 #ptvsd.wait_for_attach()
 import sys, os
 import subprocess
 from subprocess import call
 from time import sleep
 import pifacecad
-import alsaaudio
+#import alsaaudio#
 import time
 import signal
 from MpcRadio.MpcRadio import MpcRadio 
+from xml.dom import minidom
 
 GET_IP_CMD = "hostname --all-ip-addresses"
 
@@ -33,6 +35,7 @@ global alarm_snooze
 global timer
 global switchlistener
 global radio
+global cad
 
 listeRadio = []
 radioIsPlaying=0
@@ -44,8 +47,6 @@ timerAlarm=0
 alarmeActive=0
 choixMenu=0
 etat=1
-# valplus = volume son
-valplus=30
 processSleepTime=0.01
 timeok=time.time()
 # menuPosition position menu en memoire
@@ -61,19 +62,9 @@ STATE_FOUR = 4
 STATE_PLAY_ALARM=5
 
 
-## liste des radio enregistr? avec MPC
-#listeRadio.append("ShoutCast")
-#listeRadio.append("Classique")
-#listeRadio.append("Radio-Canada")
-
 ALARM="00:00"
 ALARMCHOIX=ALARM
 ALARMDUR="00:00"
-
-## Stop Radio
-#call(["mpc", "stop"])
-##call(["mpc", "play"])
-##call(["mpc", "stats"])
     
 cad = pifacecad.PiFaceCAD()
 cad.lcd.blink_off()
@@ -81,7 +72,38 @@ cad.lcd.cursor_off()
 
 listener = pifacecad.SwitchEventListener()
 
-    
+
+class ReveilConfig(object):
+
+    def getVolume(self):
+        volumeNode = self.xmldoc.getElementsByTagName('volume')[0]
+        if self.verbose:
+            print ("data:{}".format(volumeNode))
+        self.volume = int(volumeNode.getAttribute("value"))
+        if self.verbose:
+            print("volume :{0}".format(volumeNode.getAttribute("value") ) )
+        return self.volume
+
+    def setVolume(self, iVolume):
+        volumeNode = self.xmldoc.getElementsByTagName('volume')[0]
+        volumeNode.attributes["value"].value = str(iVolume)
+        self.volume=iVolume
+        self.writeToFile()
+        
+    def writeToFile(self):
+        file = open(self.fileName, "wb")
+        self.xmldoc.writexml(file)
+        file.close()
+
+    def __init__(self, iFileName='config.xml', iVerbose=0):
+        self.verbose=iVerbose
+        self.fileName=iFileName
+        self.xmldoc = minidom.parse(self.fileName)
+        self.getVolume()
+
+
+gConfig = ReveilConfig()
+
 def stop(signal, frame):
     print "Stop listening switches"
     listener.deactivate()
@@ -106,6 +128,7 @@ def wait_for_ip():
 def writeToDisplay(iCol, iRow, iText):
     cad.lcd.set_cursor(iCol, iRow) # col, row
     cad.lcd.write("{:16}".format(iText ) )
+    print "[{0}:{1}]{2}".format(iCol, iRow, iText)
 
 def show_sysinfo():
     writeToDisplay(0,1,"IP:{}".format(get_my_ip()))
@@ -120,44 +143,18 @@ def get_time():
     return date,heure
 
 def volume(deltak):
-    global valplus
-    #os.system('clear')
-    if deltak > 0: valplus=valplus+1
-    else: valplus=valplus-1
-    if valplus>=100: valplus=100
-    call(["mpc", "volume", str(valplus)])   
-    #led.draw_text2(0,24,"Volume :" + str(valplus) +" % ",1)
-    writeToDisplay(0,0,"Volume :{}".format(str(valplus)))
+    global gConfig
+    volume=gConfig.getVolume()
+    if deltak > 0: 
+        volume=volume+1
+    else: 
+        volume=volume-1
+    if volume>=100: 
+        volume=100
+    gConfig.setVolume(volume)
+    call(["mpc", "volume", str(volume)])   
+    writeToDisplay(0,0,"Volume :{}".format(str(volume)))
     
-#def radioplay(val):
-#    global wifi
-#    global radioIsPlaying
-#    global radioTitre
-#    global snooze
-#    global ALARM
-#    global ALARMDUR
-#    if val > len(listeRadio): 
-#        call(["mpc", "stop"])
-#        snooze=0
-#        radioIsPlaying=0
-#        ALARM=ALARMDUR
-#    else: 
-#        radioTitre=val
-#        if wifi==0:
-#            cad.lcd.clear()
-#            writeToDisplay(1,0,"Wifi Activation")
-#            call(["ifup", "wlan0"])
-#            time.sleep(15)
-#            writeToDisplay(1,0,"Wifi Actif")
-#            wifi=1
-#        call(["mpc", "play", str(radioTitre)])
-#        radioIsPlaying=1
-
-    
-#    #cad.lcd.write("Volume :" + str(valplus) +" % ")
-#    writeToDisplay(0,0,"Volume :" + str(valplus) +" % ")
-
-#    #led.display()       
 
 def displayMenuWithChoice(menu,choix):
     global menuPosition
@@ -217,41 +214,21 @@ def clock():
         plus="on"
     else: 
         plus="off"
-    #cad.lcd.clear()
-    #led.draw_text2(0,0,time.strftime("%H:%M:%S", time.localtime()) + plus,2,2)
     wTime = time.strftime("%H:%M:%S", time.localtime())
     writeToDisplay(0,0,"{0} {1}".format(wTime, plus) )
     if radio.wifi==0: 
-        #led.draw_text2(0,24,"Wifi Inactif",1)
-        #cad.lcd.set_cursor(1, 1) # col, row
-        #cad.lcd.write("Wifi Inactif    ")
         writeToDisplay(1,1,"Wifi Inactif    ")
-    if radioIsPlaying==1: 
-        #led.draw_text2(0,24,listeRadio[radioTitre-1]+" "+timer,1)
-        #cad.lcd.set_cursor(0, 1) # col, row
-        #cad.lcd.write(listeRadio[radioTitre-1]+" "+timer)
-        writeToDisplay(0,1,listeRadio[radioTitre-1]+" "+timer)
+        print radio
+    if radio.isRadioPlaying(): 
+        writeToDisplay(0,1,radio.nowPlaying())
     else:
-        #cad.lcd.set_cursor(0, 1) # col, row
-        #cad.lcd.write("               ")
-        writeToDisplay(0,1,"               ")
-    #led.display()
-
+        writeToDisplay(0,1,"no radio  ")
 
 def clockAlarm():
     #affiche l'heure quand alarm regl?
     cad.lcd.clear()
-    #led.draw_text2(0,0,time.strftime("%H:%M:%S", time.localtime()),2,2)
-    #cad.lcd.set_cursor(0, 0) # col, row
-    #cad.lcd.write(time.strftime("%H:%M:%S", time.localtime()))
     writeToDisplay(0,0,time.strftime("%H:%M:%S", time.localtime()))
-    
-    #led.display()
-    #led.draw_text2(0,18,ALARM,1,0)
-    #cad.lcd.set_cursor(10, 1) # col, row
-    #cad.lcd.write(ALARM)
     writeToDisplay(10,1,ALARM)
-    #led.display()
     time.sleep(1)
 
 # vous connaissez le snooze ;-) c'est celui qui vous permet de dormir 10 minutes de plus ;-)
@@ -278,15 +255,10 @@ def snoozeit():
     call(["mpc", "stop"])
     radioIsPlaying=0
     cad.lcd.clear()
-    #led.draw_text2(0,0,time.strftime("%H:%M:%S", time.localtime()),2,0)
     cad.lcd.set_cursor(0, 0) # col, row
     cad.lcd.write(time.strftime("%H:%M:%S", time.localtime()))
     writeToDisplay(0,0,time.strftime("%H:%M:%S", time.localtime()))
-    #led.draw_text2(23,0,"Dodo pour "+str(alarm_snooze),1)
-    #cad.lcd.set_cursor(1, 1) # col, row
-    #cad.lcd.write("Dodo pour "+str(alarm_snooze))
     writeToDisplay(1,1,"Dodo pour "+str(alarm_snooze))
-    #led.display()
     time.sleep(0.5)
 
 def timerRadio(varsnooze=30):
@@ -348,16 +320,12 @@ def alarm(deltak,type):
     ALARMDUR=ALARM
     cad.lcd.clear()
     
-    #led.draw_text2(0,0,time.strftime("%H:%M:%S", time.localtime()),2,0)
     cad.lcd.set_cursor(0, 0) # col, row
     cad.lcd.write(time.strftime("%H:%M:%S", time.localtime()))
     writeToDisplay(0,0,time.strftime("%H:%M:%S", time.localtime()))
     
-    #led.draw_text2(0,18,ALARMCHOIX,2,0)
-    #cad.lcd.set_cursor(17, 0) # col, row
-    #cad.lcd.write(ALARMCHOIX)
     writeToDisplay(10,0,ALARMCHOIX)
-    #led.display()
+
 #click est celui qu'on appelle quand on tourne le bouton
 def rotation(etat, delta):
     global processSleepTime
@@ -396,6 +364,7 @@ def rotation(etat, delta):
         elif etat==22:
             processSleepTime=0.2
             alarm(deltak,"minute")  
+
 #click est celui qu'on appelle quand on appui sur le bouton
 def click(etat1, event):
     global menuPosition
@@ -413,7 +382,7 @@ def click(etat1, event):
         #processSleepTime=0.7
         timeok=time.time()
         if etat==30:
-            radio.radioPlay(menuPosition+1)
+            radio.radioPlay(menuPosition)
             etat=STATE_ONE
             clock()
         elif etat==11:
@@ -485,9 +454,7 @@ def callClick(event):
     click(etat, event.interrupt_flag)
 
 if __name__ == "__main__":
-
     listener.register(0, pifacecad.IODIR_ON, callRotation)
-    
     
     # wait for button presses
     listener = pifacecad.SwitchEventListener(chip=cad)
@@ -508,18 +475,11 @@ if __name__ == "__main__":
         cad.lcd.backlight_off()
     else:
         cad.lcd.backlight_on()
-        #cad.lcd.set_cursor(0, 0) # col, row
-        #cad.lcd.write("Waiting for IP..")
-        #writeToDisplay(1,1,"Waiting for IP..")
         #wait_for_ip()
         #show_sysinfo()
     clock() 
     # Trouver le mixer et utilise le 1er.
-    try :
-        mixer = alsaaudio.Mixer('PCM', 0)
-    except alsaaudio.ALSAAudioError :
-        sys.stderr.write("No such mixer\n")
-        sys.exit(1)
+    
     # la boucle while permet de gerer les process suivant si on tourne ou appui sur le bouton  et check de l'alarme + snooze
     while 1:
         #print time.time()
@@ -543,10 +503,9 @@ if __name__ == "__main__":
                     radio.wifi=False
                     call(["ifdown", "wlan0"])
                     time.sleep(10)
-                    #led.draw_text2(0,18,"Wifi Down",2,0)
-                    #led.display()
                 timeok=time.time()
             processSleepTime=0.9
+        if (time.time()-timeok) > 10:
             clock()
         #if snooze==1: etat=STATE_PLAY_ALARM   
         processSleepTime=processSleepTime
