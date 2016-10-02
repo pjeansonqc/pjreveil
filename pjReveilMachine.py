@@ -11,6 +11,19 @@ import pifacecad
 import time
 import signal
 from MpcRadio.MpcRadio import MpcRadio 
+from collections import deque
+from timeit import default_timer as timer
+
+
+LCD_BUTTON_00 = 0
+LCD_BUTTON_01 = 1
+LCD_BUTTON_02 = 2
+LCD_BUTTON_03 = 4
+LCD_BUTTON_04 = 8
+LCD_BUTTON_05 = 16
+LCD_BUTTON_06 = 32
+LCD_BUTTON_07 = 64
+LCD_BUTTON_08 = 128
 
 #*****************************************************************************************
 # ReveilStateBase
@@ -23,10 +36,14 @@ class ReveilStateBase(object):
    alarm="00:00"
    currentNav=0
    currentKey=0
+   keyQueue = deque([])
+   navQueue = deque([])
+
    def __init__(self):
       self.cad = pifacecad.PiFaceCAD()
       self.cad.lcd.blink_off()
       self.cad.lcd.cursor_off()
+      self.cad.lcd.backlight_on()
       self.cad.lcd.backlight_on()
 
       self.listener = pifacecad.SwitchEventListener()
@@ -54,12 +71,14 @@ class ReveilStateBase(object):
       print "callNav"
       print "Switch pressed"
       print event.interrupt_flag
+      self.navQueue.appendleft(event.interrupt_flag)
       self.currentNav=event.interrupt_flag
     
    def callKey(self, event):
       print "callKey"
       print "Switch pressed"
       print event.interrupt_flag
+      self.keyQueue.appendleft(event.interrupt_flag)
       self.currentKey=event.interrupt_flag
 
    def time(self):
@@ -82,14 +101,18 @@ class ReveilStateBase(object):
 #
 #*****************************************************************************************
 class ReveilStateClock(ReveilStateBase):
-   __call = 0  # state variable
    def __call__(self):
       self.clock()
-      if self.currentKey==2:
-         self.next_state(ReveilStateRadio)
-         self.play()
-         self.currentKey=0
-         self()
+      if len(self.keyQueue):
+         key = self.keyQueue.pop()
+         if key==LCD_BUTTON_02:
+            self.next_state(ReveilStateRadio)
+            self.play()
+            self()
+         if key==LCD_BUTTON_05:
+            self.next_state(ReveilStateExit)
+            self()
+      time.sleep(0.5)
 
    def clock(self):
       wTime = self.time()
@@ -103,14 +126,15 @@ class ReveilStateClock(ReveilStateBase):
 #
 #*****************************************************************************************
 class ReveilStateAlarm(ReveilStateBase):
-   __call = 0
    def __call__(self):
       self.clock()
-      if self.currentKey==1:
-         self.next_state(ReveilStateClock)
-         self.currentKey=0
-         self()
-   
+      if len(self.keyQueue):
+         key = self.keyQueue.pop()
+         if key==LCD_BUTTON_01:
+            self.next_state(ReveilStateClock)
+            self()
+      time.sleep(0.5)
+
    def clock(self):
       wTime = self.time()
       self.writeToDisplay( 0,0,"{0}".format(wTime))
@@ -123,22 +147,28 @@ class ReveilStateAlarm(ReveilStateBase):
 #
 #*****************************************************************************************
 class ReveilStateRadio(ReveilStateBase):
-   __call = 0
    radio = MpcRadio()
 
    def __call__(self):
       self.clock()
-      if self.currentKey==1:
-         self.stop()
-         self.next_state(ReveilStateClock)
-         self.currentKey=0
-         self()
-      if self.currentKey==2:
-         self.currentKey=0
-         if self.radio.isRadioPlaying():
+      if len(self.keyQueue):
+         key = self.keyQueue.pop()
+         if key==LCD_BUTTON_01:
             self.stop()
-         else:
-            self.play()
+            self.next_state(ReveilStateClock)
+            self()
+         if key==LCD_BUTTON_02:
+            if self.radio.isRadioPlaying():
+               self.stop()
+            else:
+               self.play()
+         if key==LCD_BUTTON_03:
+            self.radio.volume(self.radio.getVolume()-1)
+            self.next_state(ReveilStateRadioVolume)
+         if key==LCD_BUTTON_04:
+            self.radio.volume(self.radio.getVolume()+1)
+            self.next_state(ReveilStateRadioVolume)
+      time.sleep(0.1)
 
    def clock(self):
       wTime = self.time()
@@ -150,9 +180,65 @@ class ReveilStateRadio(ReveilStateBase):
       print "play:" + str(self.radio.isRadioPlaying())
       self.radio.play()
 
+   def stop(self):
+      self.radio.stop()
+
+#*****************************************************************************************
+# ReveilStateRadioVolume
+# 
+# 
+#
+#*****************************************************************************************
+class ReveilStateRadioVolume(ReveilStateBase):
+   radio = MpcRadio()
+   start = timer()
+   def __call__(self):
+      self.clock()
+      if len(self.keyQueue):
+         key = self.keyQueue.pop()
+         if key==LCD_BUTTON_03:
+            self.start = timer()
+            self.radio.volume(self.radio.getVolume()-1)
+         if key==LCD_BUTTON_04:
+            self.start = timer()
+            self.radio.volume(self.radio.getVolume()+1)
+      if (timer() - self.start) > 3:
+         self.next_state(ReveilStateRadio)
+      time.sleep(0.01)
+
+   def clock(self):
+      wTime = self.time()
+      self.writeToDisplay( 0,0,"{0}".format(wTime))
+      self.writeToDisplay( 0,1,"Volume:{0}".format(self.radio.getVolume() ) )
+
+   def play(self):
+      print __name__
+      print "play:" + str(self.radio.isRadioPlaying())
+      self.radio.play()
 
    def stop(self):
       self.radio.stop()
+
+#*****************************************************************************************
+# ReveilStateExit
+# 
+# 
+#
+#*****************************************************************************************
+class ReveilStateExit(ReveilStateBase):
+   def __call__(self):
+      self.keyQueue.clear()
+      self.navQueue.clear()
+      self.writeToDisplay( 0,0,"")
+      self.writeToDisplay( 0,1,"")
+      self.cad.lcd.backlight_off()
+      self.listener.deactivate()
+      sys.exit(0)
+
+   def clock(self):
+      wTime = self.time()
+      self.writeToDisplay( 0,0,"{0}".format(wTime))
+      self.writeToDisplay( 0,1,"nav:{0} key:{1}".format(self.currentNav, self.currentKey))
 
 #*****************************************************************************************
 # MAIN
@@ -165,4 +251,4 @@ if __name__ == '__main__':
 
    while 1:
        sm()
-       time.sleep(0.5)
+       
