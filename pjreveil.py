@@ -8,7 +8,6 @@ import subprocess
 from subprocess import call
 from time import sleep
 import pifacecad
-#import alsaaudio#
 import time
 import signal
 from MpcRadio.MpcRadio import MpcRadio 
@@ -20,7 +19,6 @@ GET_IP_CMD = "hostname --all-ip-addresses"
 dic_jour={'Mon':'Lundi','Tue':'Mardi','Wed':'Mercredi','Thu':'Jeudi','Fri':'Vendredi','Sat':'Samedi','Sun':'Dimanche'}
 dic_mois={'Jan':'Janvier','Feb':'Fevrier','Mar':'Mars','Apr':'Avril','May':'Mai','Jun':'Juin','Jul':'Juillet','Aug':'Aout','Sep':'Septembre','Oct':'Octobre','Nov':'Novembre','Dec':'Decembre'}
 # Variable globale
-global listeRadio
 global radioIsPlaying
 global radioTitre
 global wifi
@@ -37,7 +35,6 @@ global switchlistener
 global radio
 global cad
 
-listeRadio = []
 radioIsPlaying=0
 radioTitre=1
 wifi=1
@@ -72,7 +69,12 @@ cad.lcd.cursor_off()
 
 listener = pifacecad.SwitchEventListener()
 
-
+#*****************************************************************************************
+# ReveilConfig
+# 
+# Keep permanent configurations in an xml file.
+#
+#*****************************************************************************************
 class ReveilConfig(object):
 
     def getVolume(self):
@@ -202,7 +204,6 @@ def menuReglage(choix):
     displayMenuWithChoice(menu,choix)
 
 def menuRadio(choix):
-    global listeRadio
     global radio
     displayMenuWithChoice(radio.listeRadio,choix)   
     
