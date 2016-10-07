@@ -183,6 +183,7 @@ def displayMenuWithChoice(menu,choix):
             writeToDisplay(0,1," {}".format(menu[menuPosition+1]))
     else:
         print "menuPosition is not valid:{0:d}".format(menuPosition)
+
 def menuGeneral(choix):
     menu = []
     menu.append("REGLAGES")
